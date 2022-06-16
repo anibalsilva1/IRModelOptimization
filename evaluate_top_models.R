@@ -86,23 +86,6 @@ bayes_final_mse <- bayes_final_mse %>%
 
 bayes_final_sera <- bayes_xsera_sera %>% bind_rows(bayes_lbmsera_sera)
 
-bayes_final_sera <- bayes_final_sera %>%
-  mutate(rows = row_number()) %>% 
-  filter(rows %in% c(3,4)) %>% 
-  mutate(metric = if_else(metric=="sera", "SERA", metric)) %>%  
-  mutate(model = str_remove(model, "wf.")) %>% 
-  mutate(model=ifelse(str_detect(model, "LGBMS"), "LGBM (SERA)",
-                      ifelse(str_detect(model, "xSERA"), "XGBoost (SERA)", 
-                             ifelse(str_detect(model, "xgboost"), "XGBoost", model)))) %>% 
-  mutate(oracle=ifelse(str_detect(oracle, "LGBMS"), "LGBM (SERA)",
-                       ifelse(str_detect(oracle, "xSERA"), "XGBoost (SERA)", oracle))) %>% 
-  pivot_longer(cols=c("modelProb", "oracleProb", "rope"), names_to="probs", values_to="prob") %>%
-  mutate(prob=as.double(prob),
-         probs=factor(probs, levels = c("oracleProb", "rope", "modelProb"), ordered = T),
-         model=factor(model,
-                      levels=c("XGBoost", "LGBM")),
-         oracle=factor(oracle, 
-                       levels=c("XGBoost (SERA)","LGBM (SERA)" )))
 
 levels(bayes_final_sera$oracle) <- c("XGBoost (SERA)" = TeX("$XGBoost^{\\textit{S}}$"),
                                      "LGBM (SERA)"= TeX("$LGBM^{\\textit{S}}$"))
@@ -110,11 +93,6 @@ levels(bayes_final_sera$oracle) <- c("XGBoost (SERA)" = TeX("$XGBoost^{\\textit{
 levels(bayes_final_mse$oracle) <- c("XGBoost (SERA)" = TeX("$XGBoost^{\\textit{S}}$"),
                                      "LGBM (SERA)"= TeX("$LGBM^{\\textit{S}}$"))
 
-
-bayes_final
-bayes_final <- bayes_final_sera %>% 
-  bind_rows(bayes_final_mse) %>% 
-  mutate(metric=factor(metric))
 
 bayes_plot <- bayes_final_sera %>% 
   ggplot(mapping=aes(x=prob, y=reorder(model,-rows), fill=probs, groups=model), labeller=label_parsed) +
@@ -136,36 +114,7 @@ bayes_plot <- bayes_final_sera %>%
     legend.position = "bottom",
     legend.title = element_text(face="bold", size=30)
   )
-  #scale_y_discrete(labels=c("XGBoost" = TeX("$XGBoost^{\\textit{M}}$"),
-  #                          "LGBM"= TeX("$LGBM^{\\textit{M}}$")))
-bayes_final_sera
-
-bayes_plot <- bayes_final_sera %>% 
-  ggplot(mapping=aes(x=prob, y=model, fill=probs, groups=model), labeller=label_parsed) +
-  geom_col() +
-  labs(fill = "Posterior:", x = "Probabilities") +
-  facet_grid(vars(oracle), labeller = label_parsed, scales="free", space="free") +
-  scale_fill_brewer(breaks = c("modelProb", "rope", "oracleProb"),
-                    labels = c("standard", "rope", "ours"),
-                    palette="Set1", direction=-1) +
-  scale_y_discrete(labels=c("XGBoost" = TeX("$XGBoost^{\\textit{M}}$"),
-                            "LGBM"= TeX("$LGBM^{\\textit{M}}$"))) +
-  theme(
-    panel.background = element_rect(fill="white", colour="black"),
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size=20),
-    axis.title.x = element_text(size=25),
-    #axis.title.y = element_text(size=25),
-    axis.title.y = element_blank(),
-    strip.background = element_rect(fill="grey80", colour="black"),
-    strip.text.y = element_text(size=20, margin=margin(t=30, r=20, b=40, l=30)),
-    legend.text = element_text(size=25,vjust = 0.5),
-    legend.position = "bottom",
-    legend.title = element_text(face="bold", size=30)
-  )
-
-bayes_plot <- 
-bayes_final %>% 
+bayes_plot <- bayes_final %>% 
   ggplot(mapping=aes(x=prob, y=model, fill=probs, groups=model), labeller=label_parsed) +
   geom_col() +
   labs(fill = "Posterior:", x = "Probabilities") +
@@ -180,7 +129,6 @@ bayes_final %>%
     axis.text.x = element_text(size = 20),
     axis.text.y = element_text(size=20),
     axis.title.x = element_text(size=25),
-    #axis.title.y = element_text(size=25),
     axis.title.y = element_blank(),
     strip.background = element_rect(fill="grey80", colour="black"),
     strip.text.y = element_text(size=20, margin=margin(t=40, r=20, b=40, l=30)),
