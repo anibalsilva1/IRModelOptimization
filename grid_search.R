@@ -1,4 +1,3 @@
-library(IR.SGB)
 library(performanceEstimation)
 library(tidyverse)
 library(IRon)

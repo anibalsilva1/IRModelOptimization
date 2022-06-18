@@ -1,13 +1,9 @@
-library(IR.SGB)
 library(IRon)
 library(tidyverse)
 library(latex2exp)
 library(scam)
 
-load("preds_3.RData")
-
-
-
+load("preds.RData")
 
 
 triazines_curves <- plot_sera_curves(preds_best_sera, ds_name="triazines") +
@@ -70,4 +66,4 @@ sera_plots <- ggpubr::ggarrange(
 
 sera_plots
 
-ggsave(filename="sera_curves.png", plot=sera_plots, width=20, height=15, limitsize = F)
+#ggsave(filename="sera_curves.png", plot=sera_plots, width=20, height=15, limitsize = F)

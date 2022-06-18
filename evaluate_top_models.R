@@ -1,10 +1,9 @@
-library(IR.SGB)
 library(tidyverse)
 library(performanceEstimation)
 library(IRon)
 library(latex2exp)
 
-load("datsets_to_use.RData")
+load("datasets_imbalanced.RData")
 
 path <- "results"
 
@@ -83,37 +82,36 @@ bayes_final_mse <- bayes_final_mse %>%
          oracle=factor(oracle, 
                        levels=c("XGBoost (SERA)","LGBM (SERA)" )))
 
-
 bayes_final_sera <- bayes_xsera_sera %>% bind_rows(bayes_lbmsera_sera)
+
+bayes_final_sera <- bayes_final_sera %>% 
+  mutate(rows = row_number()) %>% 
+  filter(rows %in% c(3, 4)) %>% 
+  mutate(metric = if_else(metric=="sera", "SERA", metric)) %>% 
+  mutate(model = str_remove(model, "wf.")) %>% 
+  mutate(model=ifelse(str_detect(model, "LGBMS"), "LGBM (SERA)",
+                      ifelse(str_detect(model, "xSERA"), "XGBoost (SERA)", 
+                             ifelse(str_detect(model, "xgboost"), "XGBoost", model)))) %>% 
+  mutate(oracle=ifelse(str_detect(oracle, "LGBMS"), "LGBM (SERA)",
+                       ifelse(str_detect(oracle, "xSERA"), "XGBoost (SERA)", oracle))) %>% 
+  pivot_longer(cols=c("modelProb", "oracleProb", "rope"), names_to="probs", values_to="prob") %>%
+  mutate(prob=as.double(prob),
+         probs=factor(probs, levels = c("oracleProb", "rope", "modelProb"), ordered = T),
+         model=factor(model,
+                      levels=c("XGBoost", "LGBM")),
+         oracle=factor(oracle, 
+                       levels=c("XGBoost (SERA)","LGBM (SERA)" )))
 
 
 levels(bayes_final_sera$oracle) <- c("XGBoost (SERA)" = TeX("$XGBoost^{\\textit{S}}$"),
                                      "LGBM (SERA)"= TeX("$LGBM^{\\textit{S}}$"))
 
 levels(bayes_final_mse$oracle) <- c("XGBoost (SERA)" = TeX("$XGBoost^{\\textit{S}}$"),
-                                     "LGBM (SERA)"= TeX("$LGBM^{\\textit{S}}$"))
+                                    "LGBM (SERA)"= TeX("$LGBM^{\\textit{S}}$"))
 
 
-bayes_plot <- bayes_final_sera %>% 
-  ggplot(mapping=aes(x=prob, y=reorder(model,-rows), fill=probs, groups=model), labeller=label_parsed) +
-  geom_col() +
-  labs(fill = "Posterior:", x = "Probabilities") +
-  scale_fill_brewer(breaks = c("modelProb", "rope", "oracleProb"),
-                    labels = c("standard", "rope", "ours"),
-                    palette="Set1", direction=-1) +
-  theme(
-    panel.background = element_rect(fill="white", colour="black"),
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size=20),
-    axis.title.x = element_text(size=25),
-    #axis.title.y = element_text(size=25),
-    axis.title.y = element_blank(),
-    #strip.background = element_rect(fill="grey80", colour="black"),
-    #strip.text.y = element_text(size=20, margin=margin(t=30, r=20, b=40, l=30)),
-    legend.text = element_text(size=25,vjust = 0.5),
-    legend.position = "bottom",
-    legend.title = element_text(face="bold", size=30)
-  )
+bayes_final <- bayes_final_mse %>% bind_rows(bayes_final_sera)
+
 bayes_plot <- bayes_final %>% 
   ggplot(mapping=aes(x=prob, y=model, fill=probs, groups=model), labeller=label_parsed) +
   geom_col() +
@@ -138,9 +136,9 @@ bayes_plot <- bayes_final %>%
     legend.title = element_text(face="bold", size=30)
   )
 
+bayes_plot
 
-
-ggsave(filename="bayes_sign_rsults.png", plot=bayes_plot, width=14, height=7)
+#ggsave(filename="bayes_sign_rsults.png", plot=bayes_plot, width=14, height=7)
 
 
        ##################################
@@ -156,9 +154,10 @@ top_models <- best_models_sera_df %>%
 
 #preds_best_sera <- get_predictions(dataset=datasets_to_use, bestmodels=top_models) # to get predictions
 
-load("preds_3.RData")
+load("preds.RData")
 
 score_sera <- get_test_scores(preds_best_sera, metric = "sera")
+
 score_sera %>%
   mutate(id = row_number()) %>% 
   pivot_longer(cols=matches("LG|XG"), names_to="models", values_to="errs") %>% 
@@ -170,86 +169,49 @@ score_sera
 score_sera[, c(5,4,3,2)]
 xtable::xtable(score_sera[, c(5,4,3,2)], type="latex", display=c("d","e","e","e","e"), align="ccccc")
 
-#################################################
-######## Bayes sign test in out-of-sample #######
-#################################################
+##########################
+##### Ranking models #####
+##########################
 
+ranks_sera <- score_sera %>% 
+  pivot_longer(cols=matches("LG|XG"), names_to="models", values_to="errs") %>% 
+  group_by(dataset) %>%
+  arrange(errs) %>% 
+  mutate(rank=row_number(),
+         models=factor(models, levels=c("XGBoost_SERA", "XGBoost", "LGBM_SERA", "LGBM"))) 
 
-bayes_xgboost_sera <- bayesres_preds(scores=score_sera, oracle="XGBoost_SERA")
-bayes_lgbm_sera <- bayesres_preds(scores=score_sera, oracle="LGBM_SERA")
+ranks_sera
 
-bayes_sera <- bayes_xgboost_sera %>% bind_rows(bayes_lgbm_sera)
+lbls <-  c("XGBoost_SERA"= TeX("$XGBoost^{\\textit{S}}$"),
+           "XGBoost"     = TeX("$XGBoost^{\\textit{M}}$"),
+           "LGBM_SERA"   = TeX("$LGBM^{\\textit{S}}$"),
+           "LGBM"        = TeX("$LGBM^{\\textit{M}}$")
+)
 
+ranks_sera %>% 
+  group_by(models) %>% 
+  count(rank) %>% 
+  arrange(desc(rank))
 
-bayes_sera
-
-bayes_sera <- bayes_sera %>% 
-  mutate(model = str_remove(model, "wf.")) %>% 
-  pivot_longer(cols=c("modelProb", "oracleProb", "rope"), names_to="probs", values_to="prob") %>% 
-  mutate(prob=as.double(prob),
-         probs=factor(probs, levels = c("oracleProb", "rope", "modelProb"), ordered = T),
-         model=as.factor(model),
-         oracle=factor(oracle, levels=c("XGBoost_SERA", "LGBM_SERA"))) %>% 
-  filter(!grepl("SERA", model))
-
-
-levels(bayes_sera$oracle) <- c("XGBoos_SERA" = TeX("$XGBoost^{\\textit{S}}$"),
-                               "LGBM_SERA"= TeX("$LGBM^{\\textit{S}}$"))
-
-
-
-bayes_preds_plot <- bayes_sera %>% 
-  ggplot(mapping=aes(x=prob, y=model, fill=probs, groups=model)) +
-  geom_col() +
-  labs(fill = "Posterior:", y = "Baselines", x = "Probabilities") +
-  facet_wrap(vars(oracle), strip.position="right", dir="v", labeller = label_parsed) +
-  scale_fill_brewer(breaks = c("modelProb", "rope", "oracleProb"),
-                    labels = c("baseline", "rope", "oracle"),
-                    palette="Set1", direction=-1) +
-  scale_y_discrete(labels=c("XGBoost" = TeX("$XGBoost^{\\textit{M}}$"),
-                            "LGBM"= TeX("$LGBM^{\\textit{M}}$"))) +
-  theme(
-    panel.background = element_rect(fill="white", colour="black"),
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size=20),
-    axis.title.x = element_text(size=25),
-    axis.title.y = element_text(size=25),
-    strip.background = element_rect(fill="grey80", colour="black"),
-    strip.text.y = element_text(size=20, margin=margin(t=30, r=20, b=40, l=30)),
-    legend.text = element_text(size=25,vjust = 0.5),
+ranks_plot <- ranks_sera %>% 
+  ggplot(mapping=aes(x=models, y=rank)) +
+  geom_boxplot(width=0.8) +
+  scale_x_discrete(labels=lbls) +
+  xlab("Models") +
+  ylab("Rank") +
+  labs(fill = "Models:") +
+  ggplot2::theme(
+    panel.grid.major = element_line(colour="grey90"),
+    legend.title = element_text(face = "bold", size=25),
     legend.position = "bottom",
-    legend.title = element_text(face="bold", size=30)
+    legend.text = element_text(size=20),
+    plot.title = element_text(size=25),
+    axis.title.y = element_text(size=20),
+    axis.text.x = element_text(size=15),
+    axis.title.x = element_text(size=20),
+    axis.text.y = element_text(size=15)
   )
 
-bayes_preds_plot
+ranks_plot
 
-
-bayes_sera <- bayes_sera %>% mutate(set = "Out-of-Sample") %>% mutate(set=as.factor(set))
-bayes_final_sera <- bayes_final_sera %>% mutate(set = "Cross-Validation") %>% mutate(set=as.factor(set))
-
-
-
-bayes_sera %>% bind_rows(bayes_final_sera) %>% 
-  ggplot(mapping=aes(x=prob, y=model, fill=probs, groups=model)) +
-  geom_col() +
-  labs(fill = "Posterior:", y = "Baselines", x = "Probabilities") +
-  facet_grid(oracle ~ set, labeller=label_parsed) +
-  scale_fill_brewer(breaks = c("modelProb", "rope", "oracleProb"),
-                    labels = c("baseline", "rope", "oracle"),
-                    palette="Set1", direction=-1) +
-  scale_y_discrete(labels=c("XGBoost" = TeX("$XGBoost^{\\textit{M}}$"),
-                            "LGBM"= TeX("$LGBM^{\\textit{M}}$"))) +
-  theme(
-    panel.background = element_rect(fill="white", colour="black"),
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size=20),
-    axis.title.x = element_text(size=25),
-    axis.title.y = element_text(size=25),
-    strip.background = element_rect(fill="grey80", colour="black"),
-    strip.text.y = element_text(size=20, margin=margin(t=30, r=20, b=40, l=30)),
-    strip.text.x = element_text(size=20, margin=margin(t=30, r=20, b=40, l=30)),
-    legend.text = element_text(size=25,vjust = 0.5),
-    legend.position = "bottom",
-    legend.title = element_text(face="bold", size=30)
-  )
-
+#ggsave(filename="ranks_plot.png", plot=ranks_plot, width=10, height=5)
