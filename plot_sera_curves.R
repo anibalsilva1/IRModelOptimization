@@ -66,4 +66,5 @@ sera_plots <- ggpubr::ggarrange(
 
 sera_plots
 
-#ggsave(filename="sera_curves.png", plot=sera_plots, width=20, height=15, limitsize = F)
+ggsave(filename="sera_curves.png", plot=sera_plots, width=20, height=15, limitsize = F)
+

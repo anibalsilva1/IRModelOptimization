@@ -157,17 +157,56 @@ top_models <- best_models_sera_df %>%
 load("preds.RData")
 
 score_sera <- get_test_scores(preds_best_sera, metric = "sera")
+score_mse <- get_test_scores(preds_best_sera, metric = "mse")
+
+score_sera
+score_mse
 
 score_sera %>%
   mutate(id = row_number()) %>% 
   pivot_longer(cols=matches("LG|XG"), names_to="models", values_to="errs") %>% 
   group_by(dataset) %>% 
   slice_min(errs) %>% 
-  arrange(id) %>% print(n=36)
+  arrange(id)
 
-score_sera
-score_sera[, c(5,4,3,2)]
+
+score_sera %>% 
+  pivot_longer(cols=matches("XG|LG")) %>% 
+  group_by(dataset) %>% 
+  slice_min(value) %>% 
+  ungroup() %>% 
+  count(name)
+
+score_sera %>% 
+  dplyr::select(dataset, matches("XG")) %>% 
+  pivot_longer(cols=matches("XG")) %>% 
+  group_by(dataset) %>% 
+  slice_min(value) %>% 
+  ungroup() %>% 
+  count(name)
+
+
+score_mse %>% 
+  pivot_longer(cols=matches("LG|XG")) %>% 
+  group_by(dataset) %>% 
+  slice_min(value) %>% 
+  ungroup() %>% 
+  count(name)
+
+score_mse <- score_mse %>% 
+  mutate(id=row_number())
+
+
+score_sera %>% 
+  pivot_longer(cols=matches("LG")) %>% 
+  group_by(dataset) %>% 
+  slice_min(value) %>%
+  ungroup() %>% 
+  count(name)
+  
+  
 xtable::xtable(score_sera[, c(5,4,3,2)], type="latex", display=c("d","e","e","e","e"), align="ccccc")
+xtable::xtable(score_mse[, c(5,4,3,2)], type="latex", display=c("d","e","e","e","e"), align="ccccc")
 
 ##########################
 ##### Ranking models #####
@@ -178,9 +217,17 @@ ranks_sera <- score_sera %>%
   group_by(dataset) %>%
   arrange(errs) %>% 
   mutate(rank=row_number(),
-         models=factor(models, levels=c("XGBoost_SERA", "XGBoost", "LGBM_SERA", "LGBM"))) 
+         metric="SERA",
+         models=factor(models, levels=c("XGBoost", "XGBoost_SERA", "LGBM", "LGBM_SERA"))) 
 
-ranks_sera
+ranks_mse <- score_mse %>% 
+  pivot_longer(cols=matches("LG|XG"), names_to="models", values_to="errs") %>% 
+  group_by(dataset) %>%
+  arrange(errs) %>% 
+  mutate(rank=row_number(),
+         metric="MSE",
+         models=factor(models, levels=c("XGBoost", "XGBoost_SERA", "LGBM", "LGBM_SERA")))
+
 
 lbls <-  c("XGBoost_SERA"= TeX("$XGBoost^{\\textit{S}}$"),
            "XGBoost"     = TeX("$XGBoost^{\\textit{M}}$"),
@@ -193,25 +240,36 @@ ranks_sera %>%
   count(rank) %>% 
   arrange(desc(rank))
 
-ranks_plot <- ranks_sera %>% 
-  ggplot(mapping=aes(x=models, y=rank)) +
+
+
+
+ranks_plot <- ranks_mse %>% 
+  bind_rows(ranks_sera) %>% 
+  ggplot(mapping=aes(x=models, y=rank, fill=models)) +
   geom_boxplot(width=0.8) +
-  scale_x_discrete(labels=lbls) +
+  scale_fill_brewer(labels=lbls, palette="Set1") +
   xlab("Models") +
   ylab("Rank") +
   labs(fill = "Models:") +
+  facet_wrap(vars(metric)) + 
   ggplot2::theme(
-    panel.grid.major = element_line(colour="grey90"),
+    panel.background = element_rect(fill="white", colour="black"),
+    panel.grid.major = element_blank(),
     legend.title = element_text(face = "bold", size=25),
-    legend.position = "bottom",
+    legend.key = element_blank(),
     legend.text = element_text(size=20),
+    legend.position = "bottom",
     plot.title = element_text(size=25),
     axis.title.y = element_text(size=20),
-    axis.text.x = element_text(size=15),
-    axis.title.x = element_text(size=20),
-    axis.text.y = element_text(size=15)
+    axis.text.y = element_text(size=15),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    strip.text.x = element_text(size=20, margin=margin(t=10, r=10, b=10, l=20)),
+    strip.background = element_rect(fill="grey80", colour="black")
   )
 
-ranks_plot
 
-#ggsave(filename="ranks_plot.png", plot=ranks_plot, width=10, height=5)
+
+ranks_plot
+ggsave(filename="ranks_plot.png", plot=ranks_plot, width=10, height=5)

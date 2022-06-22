@@ -82,7 +82,6 @@ get_test_scores <- function(predictions, metric = "sera", tr = 0.9, norm = F){
 
     }
   }
-  print(res)
   res <- res %>%
     add_column(dataset = nDs, .before = models[1]) %>%
     dplyr::select(-trues)
